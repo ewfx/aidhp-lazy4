@@ -9,6 +9,7 @@ from textblob import TextBlob
 import requests
 import os
 from datetime import datetime
+from transformers import pipeline
 
 # Create a Flask app instance
 app = Flask(__name__)
@@ -25,54 +26,21 @@ logger = logging.getLogger()  # Root logger
 logger.setLevel(logging.INFO)  # Set the logging level
 logger.addHandler(handler)
 
-# Expanded sample dataset with more user IDs
-data = {
-    "userID": ["U001", "U002", "U003", "U004", "U005", "U006", "U007", "U008", "U009", "U010"],
-    "transaction_history": [
-        "Stocks, Mutual Funds, Savings",
-        "Bonds, Real Estate, Insurance",
-        "Fixed Deposits, Savings, Credit Card",
-        "Cryptocurrency, Stocks, Commodities",
-        "Savings, Mutual Funds, Bonds",
-        "Real Estate, Savings, Insurance",
-        "Stocks, Cryptocurrency, Mutual Funds",
-        "Fixed Deposits, Emergency Savings, Bonds",
-        "Savings, Commodities, Real Estate",
-        "Mutual Funds, Stocks, Fixed Deposits"
-    ],
-    "income": [50000, 75000, 60000, 90000, 45000, 80000, 65000, 72000, 47000, 89000],
-    "risk_profile": [
-        "Conservative", "Moderate", "Aggressive", "Aggressive", "Conservative",
-        "Moderate", "Aggressive", "Conservative", "Moderate", "Moderate"
-    ],
-    "goal": [
-        "Retirement", "Buying a House", "Education", "Investments", "Emergency Savings",
-        "Retirement", "Investments", "Buying a House", "Emergency Savings", "Education"
-    ],
-    "city": [
-        "Mumbai", "New York", "London", "Tokyo", "Singapore",
-        "Sydney", "Berlin", "Paris", "Dubai", "Toronto"
-    ],
-    "market_trend": [
-        "Bullish", "Bearish", "Neutral", "Bullish", "Bearish",
-        "Neutral", "Bullish", "Bearish", "Neutral", "Bullish"
-    ],
-    "embeddings": [
-        [0.2, 0.5, 0.8], [0.6, 0.1, 0.3], [0.4, 0.7, 0.9],
-        [0.5, 0.4, 0.6], [0.3, 0.8, 0.2], [0.7, 0.2, 0.5],
-        [0.3, 0.6, 0.8], [0.5, 0.7, 0.9], [0.4, 0.3, 0.7],
-        [0.6, 0.8, 0.4]
-    ],
-    "product_name": [
-        "Pension Fund A", "Real Estate B", "Education Loan C",
-        "Crypto Investment Plan", "Mutual Fund D", "Retirement Fund E",
-        "Global Equity Fund", "Bond Investment Plan", "Savings Growth Fund", "Education Trust Fund"
-    ],
-    "price": [10000, 500000, 20000, 70000, 15000, 30000, 80000, 45000, 12000, 25000],
-    "minimum_income": [20000, 60000, 40000, 80000, 30000, 50000, 70000, 40000, 35000, 45000]
-}
+# Load user inputs from Excel
+user_inputs_file = "C:\\Users\\suchi\\OneDrive\\Documents\\data.xlsx"  # Path to your Excel file
+df = pd.read_excel(user_inputs_file)  # Read Excel file into a Pandas DataFrame
 
-df = pd.DataFrame(data)
+embedding_pipeline = pipeline("feature-extraction", model="distilbert-base-uncased")
+
+def generate_embeddings(text):
+    """Generate embeddings for lyrics using Hugging Face."""
+    embedding = embedding_pipeline(text)
+#    print("embedding values:",embedding)
+    return embedding[0][0]  # Simplified output (mean pooling can be used for large vectors)
+
+# Apply embedding generation to the 'lyrics' column
+df["embeddings"] = df["transaction_history"].apply(generate_embeddings)
+
 
 # Step 1: Fetch market trends dynamically using Alpha Vantage
 def fetch_market_trend():
@@ -117,12 +85,7 @@ def analyze_sentiment_vader(text):
     sentiment = "positive" if compound_score > 0 else "negative" if compound_score < 0 else "neutral"
     return sentiment, compound_score
 
-def analyze_sentiment_textblob(text):
-    """Analyze sentiment using TextBlob."""
-    blob = TextBlob(text)
-    polarity = blob.sentiment.polarity
-    sentiment = "positive" if polarity > 0 else "negative" if polarity < 0 else "neutral"
-    return sentiment, polarity
+ 
 
 print("Script is starting...")
 
@@ -173,7 +136,7 @@ def recommend_financial_products(user_id, city, market_trend, risk_profile, goal
     user_embeddings = np.array(list(user_data["embeddings"])).reshape(1, -1)
     all_embeddings = np.array(list(df["embeddings"]))
 
-    # Compute similarity scores
+    # Compute cosine_similarity scores
     similarity_scores = cosine_similarity(user_embeddings, all_embeddings)
 
     # Dynamic scoring for context
@@ -205,7 +168,7 @@ def recommend_financial_products(user_id, city, market_trend, risk_profile, goal
 
     # Fetch real-time stock price (Alpha Vantage example)
     stock_price = fetch_market_trend()  # Example: fetch stock data or market trend
-
+        
     # Return recommendations and additional insights
     return {
         "recommendations": recommendations,
@@ -258,3 +221,4 @@ def recommend():
 
 if __name__ == '__main__':
     app.run(debug=False)
+
